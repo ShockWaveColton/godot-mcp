@@ -1,0 +1,12 @@
+# Python (mcp-server)
+mcp-server/.venv/
+mcp-server/__pycache__/
+**/__pycache__/
+*.pyc
+
+# Godot editor cache (only relevant if you open this repo as a project)
+.godot/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

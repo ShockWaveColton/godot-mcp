@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "godot": {
+      "command": "uv",
+      "args": ["run", "--directory", "mcp-server", "server.py"],
+      "env": {
+        "GODOT_MCP_PORT": "9081"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+[project]
+name = "godot-mcp-server"
+version = "0.1.0"
+description = "MCP server bridging Claude Code to the Godot 4.7 editor"
+# Upper bound keeps uv off bleeding-edge 3.14 (some wheels lag); uv will auto-fetch a
+# managed 3.13 if the system interpreter is newer.
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "mcp[cli]>=1.10,<2",
+    "websockets>=12",
+]
+
+[tool.uv]
+package = false

@@ -1,0 +1,12 @@
+# Normalize line endings: store LF in the repo, check out native on each OS.
+* text=auto
+
+# Keep these LF even on Windows checkouts (Godot/Python/shell tooling expect it).
+*.gd   text eol=lf
+*.py   text eol=lf
+*.cfg  text eol=lf
+*.uid  text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.lock text eol=lf
+*.md   text eol=lf
