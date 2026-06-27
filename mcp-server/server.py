@@ -83,11 +83,15 @@ async def _ws_handler(ws):
         async for raw in ws:
             try:
                 msg = json.loads(raw)
-            except (ValueError, TypeError):
+                if not isinstance(msg, dict):
+                    continue  # only correlate object replies; ignore bare arrays/strings/etc.
+                fut = _pending.pop(str(msg.get("id")), None)
+                if fut is not None and not fut.done():
+                    fut.set_result(msg)
+            except Exception:
+                # Never let one bad frame kill the handler — that would null _editor_ws and drop
+                # the shared editor link for every connected client.
                 continue
-            fut = _pending.pop(str(msg.get("id")), None)
-            if fut is not None and not fut.done():
-                fut.set_result(msg)
     except websockets.ConnectionClosed:
         pass
     finally:
@@ -545,9 +549,16 @@ def _run_http() -> None:
 
     global _BIND_WS_IN_SESSION_LIFESPAN
     _BIND_WS_IN_SESSION_LIFESPAN = False  # the per-session lifespan must NOT bind the WS now
-    mcp.settings.json_response = True     # plain JSON responses (broader client compat, e.g. Codex)
+    mcp.settings.json_response = True      # plain JSON responses (broader client compat, e.g. Codex)
+    # Stateless: each POST is self-contained, no mcp-session-id handshake to track. This is the
+    # right model for a long-lived shared server that AUTO-RESTARTS (new editor PID = new process):
+    # otherwise a client's cached session id 404s ("Session terminated") after a restart and looks
+    # like a crash. Safe to enable ONLY because the editor WS is now bound at the app level above —
+    # in stateless mode FastMCP re-runs the per-session lifespan per request, but that lifespan is
+    # a no-op here (the WS is not in it), so there's no per-request re-bind.
+    mcp.settings.stateless_http = True
 
-    app = mcp.streamable_http_app()       # reads json_response from settings set above
+    app = mcp.streamable_http_app()        # reads json_response/stateless_http from settings above
     inner_lifespan = app.router.lifespan_context
 
     @asynccontextmanager

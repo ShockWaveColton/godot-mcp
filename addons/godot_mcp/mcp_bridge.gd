@@ -43,6 +43,15 @@ var _server_pid := -1  # pid of an auto-started server we own (so we can stop it
 
 
 func _enter_tree() -> void:
+	# Stay completely inert in a headless / --import / --export run. Such a run still instantiates
+	# @tool EditorPlugins, so without this the bridge would connect OUT to the editor WebSocket and
+	# HIJACK the single editor slot the shared server tracks — e.g. an agent running
+	# `godot --headless --path <project> --import` to reimport assets would displace the real
+	# editor's link, then null it on exit, stranding every connected MCP client ("editor not
+	# connected"). Only the real interactive editor should drive the bridge.
+	if _is_headless_or_batch():
+		print("[godot-mcp] headless/import/export run — bridge inert (not connecting, not auto-starting).")
+		return
 	_register_settings()
 	_load_router()
 	_maybe_start_server()  # opt-in; launches the shared HTTP server so you needn't run it by hand
@@ -52,6 +61,17 @@ func _enter_tree() -> void:
 	add_child(_poller)
 	_connect_socket()
 	print("[godot-mcp] bridge enabled; connecting to ws://%s:%d" % [SERVER_HOST, _server_port()])
+
+
+## True for non-interactive editor runs (headless, or a batch --import/--export), where the bridge
+## must not touch the shared editor WebSocket.
+func _is_headless_or_batch() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return true
+	for arg in OS.get_cmdline_args():
+		if arg == "--import" or arg == "--validate-only" or arg.begins_with("--export"):
+			return true
+	return false
 
 
 ## The configured bridge port (project setting, falling back to DEFAULT_PORT).
