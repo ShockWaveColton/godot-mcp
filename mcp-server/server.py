@@ -488,6 +488,12 @@ if __name__ == "__main__":
     if transport in ("http", "streamable-http", "streamable_http"):
         mcp.settings.host = os.environ.get("GODOT_MCP_HTTP_HOST", "127.0.0.1")
         mcp.settings.port = int(os.environ.get("GODOT_MCP_HTTP_PORT", "9100"))
+        # Plain JSON request/response, no session id — the most broadly compatible HTTP MCP mode.
+        # FastMCP's default (SSE responses + a required `text/event-stream` Accept + session-id
+        # tracking) trips up stricter clients (e.g. Codex's handshake). Safe here: every tool is a
+        # synchronous request/response with no server-initiated streaming.
+        mcp.settings.json_response = True
+        mcp.settings.stateless_http = True
         print(
             f"[godot-mcp] MCP over streamable-http at "
             f"http://{mcp.settings.host}:{mcp.settings.port}{mcp.settings.streamable_http_path} "
