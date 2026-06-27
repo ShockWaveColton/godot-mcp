@@ -119,8 +119,16 @@ async def _call_editor(method: str, params: dict | None = None):
     return msg.get("result") if isinstance(msg, dict) else None
 
 
+# In HTTP mode the editor WebSocket is bound ONCE at the ASGI-app level (see _run_http), not in
+# this per-session lifespan — FastMCP runs the session lifespan once *per client session*, so
+# binding the WS here would make a 2nd concurrent client (e.g. Codex alongside Claude) collide on
+# the port and crash its session. stdio is single-session, so there it binds here, once.
+_BIND_WS_IN_SESSION_LIFESPAN = True
+
+
 @asynccontextmanager
-async def _lifespan(_server):
+async def _editor_ws_server():
+    """Bind the editor-facing WebSocket listener for the lifetime of the block."""
     try:
         ws_server = await websockets.serve(_ws_handler, HOST, PORT, max_size=MAX_MSG)
     except OSError as e:
@@ -141,6 +149,15 @@ async def _lifespan(_server):
     finally:
         ws_server.close()
         await ws_server.wait_closed()
+
+
+@asynccontextmanager
+async def _lifespan(_server):
+    if not _BIND_WS_IN_SESSION_LIFESPAN:
+        yield  # HTTP mode: the editor WS is bound once at the app level instead.
+        return
+    async with _editor_ws_server():
+        yield
 
 
 mcp = FastMCP("godot", lifespan=_lifespan)
@@ -517,6 +534,32 @@ async def run_in_editor(expression: str) -> dict:
     return await _call_editor("run_in_editor", {"expression": expression})
 
 
+def _run_http() -> None:
+    """Serve MCP over streamable-HTTP for multiple concurrent clients.
+
+    Binds the editor WebSocket ONCE at the ASGI-app level rather than in the per-session MCP
+    lifespan — FastMCP runs that lifespan once per client session, so binding the WS there makes
+    a 2nd concurrent client collide on the port and crash. Here all sessions share one editor link.
+    """
+    import uvicorn
+
+    global _BIND_WS_IN_SESSION_LIFESPAN
+    _BIND_WS_IN_SESSION_LIFESPAN = False  # the per-session lifespan must NOT bind the WS now
+    mcp.settings.json_response = True     # plain JSON responses (broader client compat, e.g. Codex)
+
+    app = mcp.streamable_http_app()       # reads json_response from settings set above
+    inner_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def _app_lifespan(scope_app):
+        async with _editor_ws_server():            # editor WS: bound once for the whole process
+            async with inner_lifespan(scope_app):  # FastMCP's streamable-http session manager
+                yield
+
+    app.router.lifespan_context = _app_lifespan
+    uvicorn.run(app, host=mcp.settings.host, port=mcp.settings.port, log_level="warning")
+
+
 if __name__ == "__main__":
     # When auto-started by the editor, tie our lifetime to it so we never orphan.
     _parent = os.environ.get("GODOT_MCP_PARENT_PID", "")
@@ -533,12 +576,6 @@ if __name__ == "__main__":
     if transport in ("http", "streamable-http", "streamable_http"):
         mcp.settings.host = os.environ.get("GODOT_MCP_HTTP_HOST", "127.0.0.1")
         mcp.settings.port = int(os.environ.get("GODOT_MCP_HTTP_PORT", "9100"))
-        # Plain JSON request/response, no session id — the most broadly compatible HTTP MCP mode.
-        # FastMCP's default (SSE responses + a required `text/event-stream` Accept + session-id
-        # tracking) trips up stricter clients (e.g. Codex's handshake). Safe here: every tool is a
-        # synchronous request/response with no server-initiated streaming.
-        mcp.settings.json_response = True
-        mcp.settings.stateless_http = True
         print(
             f"[godot-mcp] MCP over streamable-http at "
             f"http://{mcp.settings.host}:{mcp.settings.port}{mcp.settings.streamable_http_path} "
@@ -546,7 +583,7 @@ if __name__ == "__main__":
             flush=True,
         )
         try:
-            mcp.run(transport="streamable-http")
+            _run_http()
         except OSError as e:
             print(
                 f"[godot-mcp] FATAL: could not bind the HTTP MCP port {mcp.settings.port} ({e}). "
