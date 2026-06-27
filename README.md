@@ -106,7 +106,15 @@ HTTP mode and point them all at its URL:
 
 The shared server keeps the single editor connection; requests from all clients are correlated
 by id and serialized through the editor's main thread (editor APIs are single-threaded anyway).
-Set `GODOT_MCP_PORT` to match your project's `[mcp] bridge/port`.
+Set `GODOT_MCP_PORT` to match your project's `[mcp] bridge/port`. HTTP mode runs **stateless**
+(no `mcp-session-id` handshake), so clients survive the server auto-restarting (e.g. when the
+editor relaunches it) without stale-session errors.
+
+> **The bridge is inert in headless / `--import` / `--export` runs.** A non-interactive Godot run
+> (e.g. an agent doing `godot --headless --path <project> --import` to reimport assets) still loads
+> `@tool` plugins — so without this guard its bridge would connect to the editor WebSocket and
+> hijack the single editor slot the shared server tracks, stranding every connected client. Only
+> the real interactive editor drives the bridge.
 
 ### Let the editor start it for you (auto-start)
 
