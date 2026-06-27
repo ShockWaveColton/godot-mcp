@@ -45,6 +45,24 @@ as a client and reconnects automatically. Developed on **Godot 4.7**; the addon 
    ```
    [`uv`](https://docs.astral.sh/uv/) resolves and installs `mcp` + `websockets` on first run.
 
+### Installing / updating with `install.ps1`
+
+If you keep several Godot projects on one machine, clone this repo once and use the included
+`install.ps1` to bring the addon into each project — and to update them all from the clone:
+
+```powershell
+# independent per-project copy:
+.\install.ps1 -Project "D:\Godot\my-game"
+# OR live-link the project to this clone (git pull here then updates every linked project):
+.\install.ps1 -Project "D:\Godot\my-game" -Link
+```
+
+It pulls the clone first, then copies or junction-links the two parts (`addons\godot_mcp` +
+`mcp-server`) into the project, leaving `.mcp.json` alone. **`-Link`** (NTFS junctions, no admin)
+is the low-maintenance choice for a multi-project dev box: `git pull` in the clone updates them
+all at once. Close the target project's editor and stop its `mcp-server` first, or the folders
+will be locked.
+
 ## Smoke test
 
 With the editor open on a scene and the plugin enabled, ask the agent:
