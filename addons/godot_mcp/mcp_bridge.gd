@@ -123,6 +123,8 @@ func _maybe_start_server() -> void:
 	OS.set_environment("GODOT_MCP_TRANSPORT", "http")
 	OS.set_environment("GODOT_MCP_PORT", str(ws_port))
 	OS.set_environment("GODOT_MCP_HTTP_PORT", str(http_port))
+	# Tie the server's life to this editor so it can't orphan and block the next launch.
+	OS.set_environment("GODOT_MCP_PARENT_PID", str(OS.get_process_id()))
 	var pid := -1
 	var venv_py := dir.path_join(".venv/Scripts/python.exe")
 	if FileAccess.file_exists(venv_py):

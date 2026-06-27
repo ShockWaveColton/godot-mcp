@@ -18,10 +18,50 @@ import base64
 import itertools
 import json
 import os
+import sys
 from contextlib import asynccontextmanager
 
 import websockets
 from mcp.server.fastmcp import FastMCP, Image
+
+
+def _pid_alive(pid: int) -> bool:
+    """Cross-platform 'is this process still running' check (no psutil dependency)."""
+    if sys.platform == "win32":
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        h = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            ok = ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
+            return bool(ok) and code.value == STILL_ACTIVE
+        finally:
+            ctypes.windll.kernel32.CloseHandle(h)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _watch_parent(pid: int) -> None:
+    """Exit when the editor that auto-started us goes away. Without this, a force-closed editor
+    leaves an orphan server holding the port — and the editor's auto-start skips a port already
+    in use, so the next session adopts the stale orphan instead of launching fresh code."""
+    import threading
+    import time
+
+    def _poll():
+        while True:
+            time.sleep(3)
+            if not _pid_alive(pid):
+                print(f"[godot-mcp] parent editor (pid {pid}) exited; shutting down server.", flush=True)
+                os._exit(0)
+
+    threading.Thread(target=_poll, daemon=True).start()
 
 HOST = os.environ.get("GODOT_MCP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("GODOT_MCP_PORT", "9081"))
@@ -478,6 +518,11 @@ async def run_in_editor(expression: str) -> dict:
 
 
 if __name__ == "__main__":
+    # When auto-started by the editor, tie our lifetime to it so we never orphan.
+    _parent = os.environ.get("GODOT_MCP_PARENT_PID", "")
+    if _parent.isdigit():
+        _watch_parent(int(_parent))
+
     # Transport selection:
     #   stdio (default)         — the MCP client spawns this server; one client per process.
     #   streamable-http / http  — run ONE long-lived server that many MCP clients (Claude Code,
