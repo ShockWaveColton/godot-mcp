@@ -86,8 +86,18 @@ HTTP mode and point them all at its URL:
 
 The shared server keeps the single editor connection; requests from all clients are correlated
 by id and serialized through the editor's main thread (editor APIs are single-threaded anyway).
-Bonus: the server outlives client restarts, so reconnects are seamless. Set `GODOT_MCP_PORT` to
-match your project's `[mcp] bridge/port`.
+Set `GODOT_MCP_PORT` to match your project's `[mcp] bridge/port`.
+
+### Let the editor start it for you (auto-start)
+
+So you don't run `serve-http.bat` by hand, the plugin can launch the shared server itself. Turn
+on **`mcp/bridge/autostart_server`** in Project Settings (or set it in `project.godot`). On
+enable, the plugin spawns the server in HTTP mode (editor WS = `mcp/bridge/port`, client endpoint
+= `mcp/bridge/http_port`, default 9100) and stops it on disable. It **skips** spawning if the port
+is already taken (so it won't stomp a manually-run server or double-spawn), and prefers the venv's
+`python.exe` so it can be cleanly stopped — falling back to `uv run` (set `mcp/bridge/uv_path` if
+`uv` isn't on the editor's PATH). Note: disabling/`reload_plugin`-ing the bridge then also bounces
+the shared server, so connected clients briefly drop and reconnect.
 
 ## Tools (37)
 
@@ -183,6 +193,10 @@ plugin toggle; the MCP client relaunches `server.py` to register new Python tool
 | `GODOT_MCP_MAX_MSG` | `33554432` | Max WebSocket message bytes (32 MiB) for screenshots/large payloads |
 | `GODOT_MCP_TRANSPORT` | `stdio` | `stdio` (spawned per client) or `http` (one shared server many clients connect to) |
 | `GODOT_MCP_HTTP_PORT` | `9100` | HTTP-mode port clients connect to (`http://HOST:PORT/mcp`) |
+
+Editor-side project settings (Project Settings → General, under `mcp/bridge/`): `port` (editor
+WS port), `autostart_server` (bool — launch the shared HTTP server on enable), `http_port`
+(client endpoint when auto-starting), `uv_path` (launcher fallback if `uv` isn't on PATH).
 
 Per-project port override: set `mcp/bridge/port` in Project Settings and match `GODOT_MCP_PORT`
 in `.mcp.json` — lets a 2D and a 3D editor run side-by-side on different ports.

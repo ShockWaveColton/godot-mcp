@@ -81,7 +81,20 @@ async def _call_editor(method: str, params: dict | None = None):
 
 @asynccontextmanager
 async def _lifespan(_server):
-    ws_server = await websockets.serve(_ws_handler, HOST, PORT, max_size=MAX_MSG)
+    try:
+        ws_server = await websockets.serve(_ws_handler, HOST, PORT, max_size=MAX_MSG)
+    except OSError as e:
+        # Fail fast and loud rather than dying on a cryptic traceback — and never silently
+        # move to another port (the editor + clients dial a fixed one; a silent move just
+        # makes everything look configured while nothing connects).
+        print(
+            f"[godot-mcp] FATAL: could not bind the editor WebSocket on {HOST}:{PORT} ({e}). "
+            f"Likely another godot server is already running on that port, or it's taken "
+            f"(Windows NahimicService squats on 9080). Pick a free port: set GODOT_MCP_PORT and "
+            f"match it in your project's [mcp] bridge/port.",
+            flush=True,
+        )
+        raise
     print(f"[godot-mcp] listening for the Godot editor on ws://{HOST}:{PORT}", flush=True)
     try:
         yield
@@ -481,6 +494,14 @@ if __name__ == "__main__":
             f"(editor WebSocket on {HOST}:{PORT}) — point multiple clients at this URL",
             flush=True,
         )
-        mcp.run(transport="streamable-http")
+        try:
+            mcp.run(transport="streamable-http")
+        except OSError as e:
+            print(
+                f"[godot-mcp] FATAL: could not bind the HTTP MCP port {mcp.settings.port} ({e}). "
+                f"Set GODOT_MCP_HTTP_PORT to a free port.",
+                flush=True,
+            )
+            raise
     else:
         mcp.run(transport="stdio")
