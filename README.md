@@ -45,23 +45,25 @@ as a client and reconnects automatically. Developed on **Godot 4.7**; the addon 
    ```
    [`uv`](https://docs.astral.sh/uv/) resolves and installs `mcp` + `websockets` on first run.
 
-### Installing / updating with `install.ps1`
+### Installing / updating across projects
 
-If you keep several Godot projects on one machine, clone this repo once and use the included
-`install.ps1` to bring the addon into each project — and to update them all from the clone:
+The addon is two folders — `addons\godot_mcp` and `mcp-server` — plus a per-project `.mcp.json`.
+To use it in a project, get both folders in. If you keep several projects on one machine, clone
+this repo once and **junction-link** each project to the clone, so one `git pull` updates them all:
 
 ```powershell
-# independent per-project copy:
-.\install.ps1 -Project "D:\Godot\my-game"
-# OR live-link the project to this clone (git pull here then updates every linked project):
-.\install.ps1 -Project "D:\Godot\my-game" -Link
+# one-time per project, with that project's editor closed:
+New-Item -ItemType Junction "<project>\addons\godot_mcp" -Target "D:\path\to\clone\addons\godot_mcp"
+New-Item -ItemType Junction "<project>\mcp-server"       -Target "D:\path\to\clone\mcp-server"
+
+# thereafter, update every linked project at once:
+git -C D:\path\to\clone pull
 ```
 
-It pulls the clone first, then copies or junction-links the two parts (`addons\godot_mcp` +
-`mcp-server`) into the project, leaving `.mcp.json` alone. **`-Link`** (NTFS junctions, no admin)
-is the low-maintenance choice for a multi-project dev box: `git pull` in the clone updates them
-all at once. Close the target project's editor and stop its `mcp-server` first, or the folders
-will be locked.
+Junctions need no admin; close the project's editor (and stop any running `mcp-server`) first so
+the folders aren't locked, and delete an existing copy before linking. Prefer an independent copy
+per project instead? Just copy those two folders in (and re-copy to update). Either way, leave
+each project's `.mcp.json` as its own file.
 
 ## Smoke test
 
