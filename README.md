@@ -57,6 +57,38 @@ With the editor open on a scene and the plugin enabled, ask the agent:
 If `ping` errors with *"editor not connected"*, the plugin isn't enabled or the editor isn't
 open. If a tool times out, check the Godot **Output** panel.
 
+## Running multiple clients at once (shared HTTP server)
+
+By default each MCP client spawns its own `server.py` over stdio — and since the server binds
+the editor WebSocket port, only **one** client can run at a time. To let several clients (e.g.
+Claude Code **and** Codex) drive the same editor concurrently, run **one** shared server in
+HTTP mode and point them all at its URL:
+
+1. Stop any per-client (stdio) godot servers (close those sessions) so the WS port is free.
+2. Start the shared server once — `mcp-server\serve-http.bat` (editor WS on `GODOT_MCP_PORT`,
+   MCP served on `GODOT_MCP_HTTP_PORT`, default `9100`). Equivalent manual command:
+   ```
+   GODOT_MCP_TRANSPORT=http GODOT_MCP_PORT=9081 GODOT_MCP_HTTP_PORT=9100 uv run --directory mcp-server server.py
+   ```
+3. Point each client at the URL instead of spawning:
+   - **Claude Code** `.mcp.json`:
+     ```json
+     { "mcpServers": { "godot": { "type": "http", "url": "http://127.0.0.1:9100/mcp" } } }
+     ```
+   - **Codex** `~/.codex/config.toml`:
+     ```toml
+     [mcp_servers.godot]
+     url = "http://127.0.0.1:9100/mcp"
+
+     [features]
+     rmcp_client = true   # Codex needs this for HTTP-transport MCP servers
+     ```
+
+The shared server keeps the single editor connection; requests from all clients are correlated
+by id and serialized through the editor's main thread (editor APIs are single-threaded anyway).
+Bonus: the server outlives client restarts, so reconnects are seamless. Set `GODOT_MCP_PORT` to
+match your project's `[mcp] bridge/port`.
+
 ## Tools (37)
 
 **Read:** `ping`, `get_project_info`, `get_scene_tree`, `list_open_scenes`,
@@ -149,6 +181,8 @@ plugin toggle; the MCP client relaunches `server.py` to register new Python tool
 | `GODOT_MCP_PORT` | `9081` | WebSocket port (must match `mcp/bridge/port` / `DEFAULT_PORT` in `mcp_bridge.gd`) |
 | `GODOT_MCP_TIMEOUT` | `30` | Seconds to wait for an editor reply |
 | `GODOT_MCP_MAX_MSG` | `33554432` | Max WebSocket message bytes (32 MiB) for screenshots/large payloads |
+| `GODOT_MCP_TRANSPORT` | `stdio` | `stdio` (spawned per client) or `http` (one shared server many clients connect to) |
+| `GODOT_MCP_HTTP_PORT` | `9100` | HTTP-mode port clients connect to (`http://HOST:PORT/mcp`) |
 
 Per-project port override: set `mcp/bridge/port` in Project Settings and match `GODOT_MCP_PORT`
 in `.mcp.json` — lets a 2D and a 3D editor run side-by-side on different ports.

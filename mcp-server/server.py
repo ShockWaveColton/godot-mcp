@@ -465,4 +465,22 @@ async def run_in_editor(expression: str) -> dict:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="stdio")
+    # Transport selection:
+    #   stdio (default)         — the MCP client spawns this server; one client per process.
+    #   streamable-http / http  — run ONE long-lived server that many MCP clients (Claude Code,
+    #                             Codex, ...) connect to by URL, so they can drive the same editor
+    #                             concurrently. The editor still connects to the WebSocket listener
+    #                             started in _lifespan (GODOT_MCP_PORT), unchanged.
+    transport = os.environ.get("GODOT_MCP_TRANSPORT", "stdio").lower()
+    if transport in ("http", "streamable-http", "streamable_http"):
+        mcp.settings.host = os.environ.get("GODOT_MCP_HTTP_HOST", "127.0.0.1")
+        mcp.settings.port = int(os.environ.get("GODOT_MCP_HTTP_PORT", "9100"))
+        print(
+            f"[godot-mcp] MCP over streamable-http at "
+            f"http://{mcp.settings.host}:{mcp.settings.port}{mcp.settings.streamable_http_path} "
+            f"(editor WebSocket on {HOST}:{PORT}) — point multiple clients at this URL",
+            flush=True,
+        )
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run(transport="stdio")
