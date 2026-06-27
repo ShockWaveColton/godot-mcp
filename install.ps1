@@ -3,7 +3,7 @@
   Install or update the Godot MCP Bridge addon into a project from this repo clone.
 
 .DESCRIPTION
-  Brings the addon's two parts — addons\godot_mcp and mcp-server — into a target Godot
+  Brings the addon's two parts (addons\godot_mcp and mcp-server) into a target Godot
   project, either by COPY (default, independent per-project copy) or by junction LINK
   (-Link: the project points at this clone, so `git pull` here updates every linked
   project at once). Pulls the clone first unless -NoPull. The project's .mcp.json is
@@ -27,9 +27,9 @@
   Skip `git pull` of the clone.
 
 .EXAMPLE
-  .\install.ps1 -Project "D:\Godot\dominions-like"          # independent copy
+  .\install.ps1 -Project "D:\Godot\my-game"          # independent copy
 .EXAMPLE
-  .\install.ps1 -Project "D:\Godot\dominions-like" -Link    # live-linked to this clone
+  .\install.ps1 -Project "D:\Godot\my-game" -Link    # live-linked to this clone
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Project,
@@ -44,7 +44,7 @@ if (-not (Test-Path (Join-Path $Project "project.godot"))) {
     throw "Not a Godot project (no project.godot found): $Project"
 }
 $Project = (Resolve-Path $Project).Path
-if ($Project -eq $Repo) { throw "Project and clone are the same folder — nothing to do." }
+if ($Project -eq $Repo) { throw "Project and clone are the same folder; nothing to do." }
 
 if (-not $NoPull) {
     Write-Host "Pulling latest in $Repo ..."
@@ -81,6 +81,7 @@ foreach ($rel in @("addons\godot_mcp", "mcp-server")) {
     }
 }
 
+$mode = if ($Link) { "linked" } else { "copied" }
 Write-Host ""
-Write-Host "Done ($(if ($Link) {'linked'} else {'copied'})). .mcp.json left untouched."
-Write-Host "In Godot: Project Settings > Plugins > enable 'Godot MCP Bridge'."
+Write-Host "Done ($mode). .mcp.json left untouched."
+Write-Host "In Godot: Project Settings, Plugins, enable 'Godot MCP Bridge'."
